@@ -36,3 +36,41 @@ export async function confirmPayment(jobId) {
 export async function getJobStatus(jobId) {
   return request(`/api/job/status/${jobId}`);
 }
+
+// WebSocket helper for real-time job status updates
+export function createJobStatusSocket(jobId, onUpdate, onError) {
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsBase = import.meta.env.VITE_WS_URL || `${wsProtocol}//${window.location.host}`;
+  const ws = new WebSocket(`${wsBase}/ws/client`);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'SUBSCRIBE', jobId }));
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'JOB_STATUS') {
+        onUpdate(msg);
+      }
+    } catch (err) {
+      if (onError) onError(err);
+    }
+  };
+
+  ws.onerror = () => {
+    // Fallback: if WS fails, do a single REST poll
+    if (onError) {
+      getJobStatus(jobId)
+        .then(data => onUpdate({ type: 'JOB_STATUS', jobId, status: data.status, message: null }))
+        .catch(() => {});
+    }
+  };
+
+  // Return cleanup function
+  return () => {
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      ws.close();
+    }
+  };
+}
