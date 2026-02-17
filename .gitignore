@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Uploaded files (temporary)
+uploads/
+
+# Downloaded files (kiosk temp)
+downloads/
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temp files
+tmpclaude-*
+test.pdf
+test_dl.pdf
+nul
