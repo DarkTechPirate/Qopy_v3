@@ -111,6 +111,8 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       deviceId: 'KIOSK_001', // default device for MVP
       status: 'AWAITING_OPTIONS',
       paymentId: null,
+      printedPages: 0,
+      printProgress: null,  // e.g. "Printing page 3 of 10"
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -250,6 +252,8 @@ app.get('/api/job/status/:jobId', (req, res) => {
     totalAmount: job.totalAmount,
     status: job.status,
     paymentId: job.paymentId,
+    printedPages: job.printedPages || 0,
+    printProgress: job.printProgress || null,
     deviceId: job.deviceId,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt
@@ -337,6 +341,20 @@ app.post('/api/device/job-update', authenticateDevice, (req, res) => {
   }
 
   res.json({ success: true, jobId, status });
+});
+
+// --- 8b. DEVICE REPORTS PRINT PROGRESS (page-by-page) ---
+app.post('/api/device/job-progress', authenticateDevice, (req, res) => {
+  const { jobId, printedPages, totalPages, message } = req.body;
+  const job = jobs.find(j => j.jobId === jobId && j.deviceId === req.device.deviceId);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  if (job.status !== 'PRINTING') return res.status(400).json({ error: 'Job not in PRINTING state' });
+
+  job.printedPages = printedPages || 0;
+  job.printProgress = message || `Printing page ${printedPages} of ${totalPages}`;
+  job.updatedAt = new Date().toISOString();
+
+  res.json({ success: true, jobId, printedPages, totalPages });
 });
 
 // --- 9. DEVICE HEARTBEAT ---
