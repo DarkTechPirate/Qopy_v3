@@ -1,0 +1,36 @@
+[Unit]
+Description=Qopy Printer Agent
+Documentation=https://github.com/your-org/qopy
+# Wait for both network AND CUPS before starting
+After=network-online.target cups.service
+Wants=network-online.target cups.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/qopy/printer
+
+# Load environment from .env file
+EnvironmentFile=/home/pi/qopy/printer/.env
+
+# Start the agent
+ExecStart=/home/pi/qopy/printer/venv/bin/python3 main.py
+
+# Restart policy: always restart on failure, with 5s delay
+Restart=always
+RestartSec=5
+
+# Logging — captured by journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=qopy-printer
+
+# Resource limits (Pi-friendly)
+# Prevent the process from consuming more than 200 MB RAM
+MemoryMax=200M
+# Nice priority: slightly below default to ensure system responsiveness
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
