@@ -30,22 +30,53 @@ async def print_file(file_path: str, job: dict) -> str:
     """
     Submit a file to CUPS via `lp`. Returns the CUPS job ID string.
 
-    Args:
-        file_path: absolute path to the downloaded PDF
-        job:       job dict from the server (sided, copies, printType, etc.)
+    If the printer rejects the PDF format (e.g. Generic-Text-Only),
+    automatically converts to PostScript via `pdftops` and retries once.
 
     Raises:
         RuntimeError: if lp returns non-zero or job ID cannot be parsed.
     """
+    result = await _try_lp(file_path, job)
+    if result is not None:
+        return result
+
+    # lp rejected PDF — try converting to PostScript and submit as raw
+    log.warning("lp rejected PDF format — attempting pdftops conversion + raw submit...")
+
+    ps_path = file_path.replace(".pdf", ".ps")
+    converted = await _convert_to_ps(file_path, ps_path)
+    if not converted:
+        raise RuntimeError(
+            "lp failed: Unsupported document-format and pdftops conversion failed. "
+            "Install poppler-utils: sudo apt install poppler-utils"
+        )
+
+    result = await _try_lp(ps_path, job, raw=True)
+    if result is not None:
+        return result
+
+    raise RuntimeError("lp failed even after PDF->PostScript conversion.")
+
+
+async def _try_lp(file_path: str, job: dict, raw: bool = False) -> Optional[str]:
+    """
+    Attempt to submit file_path to CUPS via lp.
+    Returns CUPS job ID on success, or None if the format was rejected.
+    Raises RuntimeError for other lp errors.
+    raw=True: pass -o raw to bypass CUPS format filtering (needed for text-only printers).
+    """
     sided   = job.get("sided", "single")
     copies  = str(job.get("copies", 1))
-    color   = job.get("printType", "bw")  # "bw" | "color"
+    color   = job.get("printType", "bw")
 
     sides_opt = "two-sided-long-edge" if sided == "double" else "one-sided"
-
-    cmd = ["lp", "-n", copies, "-o", f"sides={sides_opt}"]
-    if color == "bw":
-        cmd += ["-o", "ColorModel=Gray"]
+    cmd = ["lp", "-n", copies]
+    if raw:
+        cmd += ["-o", "raw"]
+    else:
+        cmd += ["-o", f"sides={sides_opt}"]
+        if color == "bw":
+            cmd += ["-o", "ColorModel=Gray"]
     cmd.append(file_path)
 
     log.info("Submitting print: %s", " ".join(cmd))
@@ -61,11 +92,19 @@ async def print_file(file_path: str, job: dict) -> str:
         proc.kill()
         raise RuntimeError("lp submission timed out after 30s")
 
+    stdout_str = stdout.decode().strip()
+    stderr_str = stderr.decode().strip()
+    combined   = (stdout_str + " " + stderr_str).lower()
+
+    # lp on some systems exits 0 but writes "Unsupported document-format" to stdout
+    if "unsupported document-format" in combined:
+        log.warning("lp format rejection: %s", stdout_str or stderr_str)
+        return None
+
     if proc.returncode != 0:
-        raise RuntimeError(f"lp failed (exit {proc.returncode}): {stderr.decode().strip()}")
+        raise RuntimeError(f"lp failed (exit {proc.returncode}): {stderr_str or stdout_str}")
 
     # Parse CUPS job ID from: "request id is PrinterName-42 (1 file(s))"
-    stdout_str = stdout.decode().strip()
     match = re.search(r"request id is (\S+)", stdout_str)
     if not match:
         raise RuntimeError(f"Cannot parse CUPS job ID from lp output: {stdout_str!r}")
@@ -73,6 +112,32 @@ async def print_file(file_path: str, job: dict) -> str:
     cups_job_id = match.group(1)
     log.info("CUPS job accepted: %s", cups_job_id)
     return cups_job_id
+
+
+async def _convert_to_ps(pdf_path: str, ps_path: str) -> bool:
+    """
+    Convert PDF to PostScript using pdftops (poppler-utils).
+    Returns True on success, False if unavailable or conversion fails.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "pdftops", pdf_path, ps_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        if proc.returncode != 0:
+            log.warning("pdftops failed (exit %d): %s", proc.returncode, stderr.decode().strip())
+            return False
+        log.info("PDF converted to PostScript: %s", ps_path)
+        return True
+    except FileNotFoundError:
+        log.warning("pdftops not found — install poppler-utils: sudo apt install poppler-utils")
+        return False
+    except Exception as exc:
+        log.warning("PDF->PS conversion error: %s", exc)
+        return False
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────

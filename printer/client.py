@@ -133,7 +133,17 @@ class QopyClient:
 
     async def send(self, msg: dict) -> None:
         """Serialize and send a JSON message over WebSocket."""
-        if self._ws and self._ws.open:
+        if self._ws is None:
+            log.warning("Cannot send — WebSocket not open. msg: %s", msg.get("type"))
+            return
+        # websockets < v14 had .open; v14+ uses .state
+        try:
+            from websockets.connection import State
+            is_open = self._ws.state is State.OPEN
+        except ImportError:
+            is_open = getattr(self._ws, "open", False)
+
+        if is_open:
             try:
                 await self._ws.send(json.dumps(msg))
                 log.debug("→ %s", msg.get("type", "?"))
@@ -141,6 +151,7 @@ class QopyClient:
                 log.error("Send failed: %s", exc)
         else:
             log.warning("Cannot send — WebSocket not open. msg: %s", msg.get("type"))
+
 
     # ─────────────────────────────────────────────────────────────────────
     # Registration
