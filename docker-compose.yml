@@ -1,0 +1,24 @@
+version: "3.8"
+services:
+  qopy:
+    build: .
+    container_name: qopy_app
+    ports:
+      - "127.0.0.1:3001:5000"
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongo:27017/qopy_db
+    depends_on:
+      - mongo
+    volumes:
+      - ./server/uploads:/app/server/uploads
+
+  mongo:
+    image: mongo:6
+    container_name: qopy_mongo
+    restart: unless-stopped
+    volumes:
+      - qopy_mongo_data:/data/db
+
+volumes:
+  qopy_mongo_data:
