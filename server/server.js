@@ -5,6 +5,7 @@
 // ============================================================================
 
 // --- AUTO DEPENDENCY INSTALLER ---
+require("dotenv").config();
 const { ensureDependencies } = require("./utils/autoInstall");
 ensureDependencies();
 
@@ -93,7 +94,6 @@ app.use((err, req, res, next) => {
 
 // --- MONGODB ---
 const connectDB = require("./config/db");
-connectDB();
 
 // --- DB MODELS ---
 const Device = require("./models/Device");
@@ -107,6 +107,9 @@ const { setupDeviceWS } = require("./ws/deviceHandler");
 // START SERVER
 // ============================================================================
 const startServer = async () => {
+  // Wait for Database connection
+  await connectDB();
+
   // Seed default Device if none exist
   try {
     const deviceCount = await Device.countDocuments();
