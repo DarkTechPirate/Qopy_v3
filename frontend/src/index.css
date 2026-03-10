@@ -374,9 +374,9 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.status-NOT_PAID { background: #f0f0f0; color: #888; }
+.status-AWAITING_OPTIONS { background: #f0f0f0; color: #888; }
+.status-AWAITING_PAYMENT { background: #e8e8e8; color: #555; }
 .status-PAID { background: #e0e0e0; color: #000; }
-.status-ASSIGNED { background: #555; color: #fff; }
 .status-PRINTING { background: #333; color: #fff; }
 .status-COMPLETED { background: #000; color: #fff; }
 .status-FAILED { background: #888; color: #fff; }

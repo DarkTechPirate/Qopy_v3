@@ -6,8 +6,14 @@ const PRICING = { bw: 3, color: 6 };
 export default function Options({ job, updateJob, onProceed, onBack, onError }) {
   const [loading, setLoading] = useState(false);
 
-  const { pages, printType, sided, copies } = job;
-  const sheets = sided === 'double' ? Math.ceil(pages / 2) : pages;
+  const { pages, printType, sided, copies, orientation, pagesPerSheet } = job;
+
+  // Logical layout sheets based on pages per sheet
+  const validPagesPerSheet = parseInt(pagesPerSheet) || 1;
+  const logicalPages = Math.ceil(pages / validPagesPerSheet);
+
+  // Physical sheets needed based on sidedness
+  const sheets = sided === 'double' ? Math.ceil(logicalPages / 2) : logicalPages;
   const rate = PRICING[printType];
   const total = sheets * rate * copies;
 
@@ -15,7 +21,7 @@ export default function Options({ job, updateJob, onProceed, onBack, onError }) 
     onError(null);
     setLoading(true);
     try {
-      const data = await setJobOptions(job.jobId, printType, sided, copies);
+      const data = await setJobOptions(job.jobId, printType, sided, copies, orientation, pagesPerSheet);
       const qrData = await getPaymentQR(job.jobId);
       onProceed({
         sheets: data.sheets,
@@ -89,6 +95,41 @@ export default function Options({ job, updateJob, onProceed, onBack, onError }) 
         </div>
       </div>
 
+      {/* Orientation */}
+      <div className="option-group">
+        <div className="option-label">Orientation</div>
+        <div className="option-cards">
+          <div
+            className={`option-card${orientation === 'portrait' ? ' selected' : ''}`}
+            onClick={() => updateJob({ orientation: 'portrait' })}
+          >
+            <div className="option-card-title">Portrait</div>
+          </div>
+          <div
+            className={`option-card${orientation === 'landscape' ? ' selected' : ''}`}
+            onClick={() => updateJob({ orientation: 'landscape' })}
+          >
+            <div className="option-card-title">Landscape</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Pages Per Sheet */}
+      <div className="option-group">
+        <div className="option-label">Pages Per Sheet</div>
+        <div className="option-cards">
+          {[1, 2, 4].map(num => (
+            <div
+              key={num}
+              className={`option-card${parseInt(pagesPerSheet) === num ? ' selected' : ''}`}
+              onClick={() => updateJob({ pagesPerSheet: num })}
+            >
+              <div className="option-card-title">{num}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Copies */}
       <div className="option-group">
         <div className="option-label">Copies</div>
@@ -126,6 +167,10 @@ export default function Options({ job, updateJob, onProceed, onBack, onError }) 
         <div className="summary-row">
           <span>Sides</span>
           <span>{sided === 'single' ? 'Single Side' : 'Double Side'}</span>
+        </div>
+        <div className="summary-row">
+          <span>Layout</span>
+          <span>{parseInt(pagesPerSheet)} per sheet ({orientation})</span>
         </div>
         <div className="summary-row">
           <span>Rate</span>

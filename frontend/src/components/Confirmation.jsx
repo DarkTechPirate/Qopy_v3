@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { createJobStatusSocket } from '../api';
+import { useState, useEffect, useRef } from 'react';
+import { getJobStatus } from '../api';
 
 const TRACKER_LABELS = ['Paid', 'Queued', 'Printing', 'Done'];
 
@@ -7,48 +7,34 @@ function trackerLevel(status) {
   if (status === 'COMPLETED') return 4;
   if (status === 'FAILED') return 4;
   if (status === 'PRINTING') return 3;
-  if (status === 'ASSIGNED') return 2;
   return 1; // PAID
 }
 
 export default function Confirmation({ job, onReset }) {
   const [status, setStatus] = useState('PAID');
   const [message, setMessage] = useState('Your document will be printed shortly.');
-  const [printedPages, setPrintedPages] = useState(0);
-  const [totalPages, setTotalPages] = useState(job.pages || 0);
+  const intervalRef = useRef(null);
 
   useEffect(() => {
-    const cleanup = createJobStatusSocket(
-      job.jobId,
-      (update) => {
-        setStatus(update.status);
-        if (update.printedPages != null) setPrintedPages(update.printedPages);
-        if (update.totalPages != null) setTotalPages(update.totalPages);
-
-        switch (update.status) {
-          case 'PAID':
-            setMessage(update.message || 'Payment confirmed. Waiting for printer...');
-            break;
-          case 'ASSIGNED':
-            setMessage('Printer accepted your job. Preparing...');
-            break;
-          case 'PRINTING':
-            setMessage(update.message || 'Your document is being printed...');
-            break;
-          case 'COMPLETED':
-            setMessage('Your document has been printed! Collect from the kiosk.');
-            break;
-          case 'FAILED':
-            setMessage('Printing failed. Please contact support.');
-            break;
+    intervalRef.current = setInterval(async () => {
+      try {
+        const data = await getJobStatus(job.jobId);
+        setStatus(data.status);
+        if (data.status === 'COMPLETED') {
+          setMessage('Your document has been printed! Collect from the kiosk.');
+          clearInterval(intervalRef.current);
+        } else if (data.status === 'FAILED') {
+          setMessage('Printing failed. Please contact support.');
+          clearInterval(intervalRef.current);
+        } else if (data.status === 'PRINTING') {
+          setMessage('Your document is being printed...');
         }
-      },
-      (err) => {
-        // WS error fallback handled inside createJobStatusSocket
+      } catch (_) {
+        // ignore polling errors
       }
-    );
+    }, 3000);
 
-    return cleanup;
+    return () => clearInterval(intervalRef.current);
   }, [job.jobId]);
 
   const level = trackerLevel(status);
@@ -92,12 +78,6 @@ export default function Confirmation({ job, onReset }) {
           <span>Kiosk</span>
           <span>KIOSK_001</span>
         </div>
-        {status === 'PRINTING' && totalPages > 0 && (
-          <div className="summary-row">
-            <span>Progress</span>
-            <span>{printedPages} / {totalPages} pages</span>
-          </div>
-        )}
       </div>
 
       {/* Progress tracker */}
