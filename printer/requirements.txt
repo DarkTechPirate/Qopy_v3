@@ -1,0 +1,23 @@
+# Qopy Printer Agent — Python Dependencies
+# Install with: pip3 install -r requirements.txt
+
+# ── WebSocket client ──────────────────────────────────────────────────────────
+websockets>=12.0
+
+# ── Async HTTP (file download) ────────────────────────────────────────────────
+aiohttp>=3.9.0
+
+# ── Async file I/O ────────────────────────────────────────────────────────────
+aiofiles>=23.1.0
+
+# ── Environment variable loader (.env file) ───────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── MIME type detection (libmagic bindings) ───────────────────────────────────
+# System dep: sudo apt install libmagic1
+python-magic>=0.4.27
+
+# ── CUPS bindings for live printer status queries ─────────────────────────────
+# System dep: sudo apt install libcups2-dev
+# Optional — if not installed, agent falls back to lpstat subprocess calls
+#pycups>=2.0.1
