@@ -144,6 +144,21 @@ const confirmPayment = async (req, res) => {
             method: 'UPI_SIMULATED'
         });
 
+        const { sendJobToDevice } = require('../ws/deviceHandler');
+        sendJobToDevice(job.deviceId, {
+            type: 'NEW_JOB',
+            job: {
+                jobId: job.jobId,
+                fileName: job.fileName,
+                pages: job.pages,
+                sheets: job.sheets,
+                printType: job.printType,
+                sided: job.sided,
+                copies: job.copies,
+                downloadUrl: `/api/device/download/${job.jobId}`
+            }
+        });
+
         res.json({
             success: true,
             jobId: job.jobId,
