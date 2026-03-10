@@ -272,24 +272,111 @@ function downloadFile(endpoint, destPath) {
 }
 
 // ============================================================================
+// WEBSOCKET LOGIC
+// ============================================================================
+const WebSocket = require('ws');
+let ws = null;
+let reconnectTimer = null;
+
+function connectWebSocket() {
+  const wsUrl = CONFIG.cloudUrl.replace(/^http/, 'ws') + '/ws/device';
+  ws = new WebSocket(wsUrl);
+
+  ws.on('open', () => {
+    state.connected = true;
+    renderDisplay();
+    // Register
+    ws.send(JSON.stringify({
+      type: 'REGISTER',
+      deviceId: CONFIG.deviceId,
+      apiKey: CONFIG.apiKey
+    }));
+  });
+
+  ws.on('message', async (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      switch (msg.type) {
+        case 'REGISTERED':
+          state.connected = true;
+          state.lastError = null;
+          // Start heartbeat loop immediately on register
+          sendHeartbeat();
+          break;
+
+        case 'NEW_JOB':
+          if (!state.currentJob) {
+            // Acknowledge the job
+            ws.send(JSON.stringify({ type: 'JOB_ACCEPTED', jobId: msg.job.jobId }));
+            // Process it implicitly, or wait for JOB_ACK
+          } else {
+            // Optional: Handle job rejection if busy
+            ws.send(JSON.stringify({ type: 'JOB_REJECTED', jobId: msg.job.jobId, reason: 'printer_busy' }));
+          }
+          break;
+
+        case 'JOB_ACK':
+          // Validated by server to start processing
+          // If we had a queue, we'd trigger it here. For simplicity:
+          // In NEW_JOB we accepted it. Let's request details if they weren't fully in NEW_JOB, or just process it.
+          // Since our NEW_JOB has all details we can just process. We need to find the job payload though.
+          // Alternatively, simply trigger process job.
+          break;
+
+        case 'PENDING_JOB':
+          if (!state.currentJob) {
+            await processJob(msg.job);
+          }
+          break;
+
+        case 'AUTH_FAILED':
+          state.connected = false;
+          state.lastError = 'Auth failed: ' + msg.reason;
+          ws.close();
+          break;
+
+        case 'ERROR':
+          state.lastError = 'Server error: ' + msg.message;
+          renderDisplay();
+          break;
+      }
+
+      // We manually process new jobs upon receipt since NEW_JOB payload contains the full job struct now
+      if (msg.type === 'NEW_JOB' && !state.currentJob) {
+        await processJob(msg.job);
+      }
+
+    } catch (err) {
+      // Ignored non-json
+    }
+  });
+
+  ws.on('close', () => {
+    state.connected = false;
+    renderDisplay();
+    // Reconnect logic
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connectWebSocket, 5000);
+  });
+
+  ws.on('error', (err) => {
+    state.lastError = 'WS Error: ' + err.message;
+    ws.close(); // let the close event handle reconnect
+  });
+}
+
+// ============================================================================
 // HEARTBEAT — keeps connection alive, reports printer status
 // ============================================================================
-async function sendHeartbeat() {
-  try {
-    const res = await apiRequest('POST', '/api/device/heartbeat', {
+function sendHeartbeat() {
+  if (ws && ws.readyState === WebSocket.OPEN && state.connected) {
+    ws.send(JSON.stringify({
+      type: 'HEARTBEAT',
       printerStatus: state.currentJob ? 'busy' : 'ready',
       paperLevel: 'ok',
       inkLevel: 'ok',
-    });
-    if (res.status === 200) {
-      state.connected = true;
-      state.lastHeartbeat = new Date().toISOString();
-    } else {
-      state.connected = false;
-    }
-  } catch (err) {
-    state.connected = false;
-    state.lastError = 'Heartbeat failed: ' + err.message;
+    }));
+    state.lastHeartbeat = new Date().toISOString();
   }
 }
 
@@ -301,49 +388,41 @@ function runPrint(filePath, job) {
     const cmdTemplate = job.sided === 'double' ? CONFIG.printCommandDuplex : CONFIG.printCommand;
     const cmd = cmdTemplate.replace(/%FILE%/g, filePath);
 
-    // Get total pages for progress tracking
     let totalPages = job.pages * (job.copies || 1);
 
-    // Report start
     state.currentJob.printedPages = 0;
     state.currentJob.totalPages = totalPages;
     state.currentJob.progressMsg = 'Starting...';
     renderDisplay();
 
-    // Report progress to cloud: starting
-    try {
-      await apiRequest('POST', '/api/device/job-progress', {
-        jobId: job.jobId,
-        printedPages: 0,
-        totalPages: totalPages,
-        message: 'Print started',
-      });
-    } catch (_) {}
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'JOB_PRINTING',
+        jobId: job.jobId
+      }));
+    }
 
-    // Simulate page-by-page progress (since most print commands don't give per-page callbacks)
-    // In production, you could monitor the print queue for actual progress
-    const progressInterval = setInterval(async () => {
+    const progressInterval = setInterval(() => {
       if (state.currentJob && state.currentJob.printedPages < totalPages) {
         state.currentJob.printedPages++;
         state.currentJob.progressMsg = '';
         renderDisplay();
 
-        // Report to cloud
-        try {
-          await apiRequest('POST', '/api/device/job-progress', {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'JOB_PROGRESS',
             jobId: job.jobId,
             printedPages: state.currentJob.printedPages,
             totalPages: totalPages,
-            message: `Printing page ${state.currentJob.printedPages} of ${totalPages}`,
-          });
-        } catch (_) {}
+            message: `Printing page ${state.currentJob.printedPages} of ${totalPages}`
+          }));
+        }
       } else {
         clearInterval(progressInterval);
       }
-    }, 1500); // ~1.5s per page simulation
+    }, 1500);
 
     if (CONFIG.simulate) {
-      // SIMULATION MODE — no real printer, just wait for progress to finish
       const waitTime = totalPages * 1500 + 500;
       setTimeout(() => {
         clearInterval(progressInterval);
@@ -353,10 +432,8 @@ function runPrint(filePath, job) {
         resolve();
       }, waitTime);
     } else {
-      // REAL PRINTER — execute print command
       exec(cmd, { timeout: 300000 }, (error, stdout, stderr) => {
         clearInterval(progressInterval);
-
         if (error) {
           state.currentJob.printedPages = totalPages;
           state.currentJob.progressMsg = 'FAILED';
@@ -388,32 +465,20 @@ async function processJob(job) {
   renderDisplay();
 
   try {
-    // 1. Download the file
     await downloadFile(job.downloadUrl, filePath);
     state.currentJob.progressMsg = 'Downloaded. Sending to printer...';
     renderDisplay();
 
-    // 2. Send to printer
     await runPrint(filePath, job);
 
-    // 3. Report completed
-    await apiRequest('POST', '/api/device/job-update', {
-      jobId: job.jobId,
-      status: 'COMPLETED',
-      message: 'Printed successfully',
-    });
-
-    // Report final progress
-    try {
-      await apiRequest('POST', '/api/device/job-progress', {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'JOB_COMPLETED',
         jobId: job.jobId,
-        printedPages: job.pages,
-        totalPages: job.pages,
-        message: 'Completed',
-      });
-    } catch (_) {}
+        message: 'Printed successfully'
+      }));
+    }
 
-    // Update stats
     state.totalJobsPrinted++;
     state.totalPagesPrinted += job.pages * (job.copies || 1);
     state.history.push({
@@ -424,15 +489,14 @@ async function processJob(job) {
     });
 
   } catch (err) {
-    // Report failure to cloud
     state.lastError = err.message;
-    try {
-      await apiRequest('POST', '/api/device/job-update', {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'JOB_FAILED',
         jobId: job.jobId,
-        status: 'FAILED',
-        message: err.message,
-      });
-    } catch (_) {}
+        message: err.message
+      }));
+    }
 
     state.history.push({
       fileName: job.fileName,
@@ -441,55 +505,22 @@ async function processJob(job) {
       time: new Date().toISOString(),
     });
   } finally {
-    // Clean up downloaded file
-    try { fs.unlinkSync(filePath); } catch (_) {}
+    try { fs.unlinkSync(filePath); } catch (_) { }
     state.currentJob = null;
     renderDisplay();
   }
 }
 
 // ============================================================================
-// POLL — check cloud for new paid jobs
-// ============================================================================
-async function pollForJobs() {
-  if (state.currentJob) return; // busy printing
-
-  try {
-    const res = await apiRequest('GET', '/api/device/jobs');
-    if (res.status === 200 && res.data && res.data.hasJob) {
-      state.connected = true;
-      state.lastError = null;
-      await processJob(res.data.job);
-    } else if (res.status === 200) {
-      state.connected = true;
-    } else {
-      state.connected = false;
-    }
-  } catch (err) {
-    state.connected = false;
-    state.lastError = 'Poll failed: ' + err.message;
-  }
-}
-
-// ============================================================================
 // MAIN LOOP
 // ============================================================================
-async function main() {
+function main() {
   renderDisplay();
-
-  // Initial heartbeat
-  await sendHeartbeat();
-  renderDisplay();
-
-  // Poll loop
-  setInterval(async () => {
-    await pollForJobs();
-    renderDisplay();
-  }, CONFIG.pollInterval);
+  connectWebSocket();
 
   // Heartbeat loop
-  setInterval(async () => {
-    await sendHeartbeat();
+  setInterval(() => {
+    sendHeartbeat();
     renderDisplay();
   }, CONFIG.heartbeatInterval);
 }

@@ -17,7 +17,7 @@ const JobSchema = new mongoose.Schema({
     deviceId: { type: String, default: 'KIOSK_001' },
     status: {
         type: String,
-        enum: ['AWAITING_OPTIONS', 'AWAITING_PAYMENT', 'PAID', 'PRINTING', 'COMPLETED', 'FAILED'],
+        enum: ['AWAITING_OPTIONS', 'AWAITING_PAYMENT', 'PAID', 'ASSIGNED', 'PRINTING', 'COMPLETED', 'FAILED'],
         default: 'AWAITING_OPTIONS'
     },
     statusMessage: { type: String, default: null },

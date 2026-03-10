@@ -72,6 +72,11 @@ connectDB();
 // --- DB MODELS ---
 const Device = require('./models/Device');
 
+const http = require('http');
+const WebSocket = require('ws');
+const { setupClientWS } = require('./ws/clientHandler');
+const { setupDeviceWS } = require('./ws/deviceHandler');
+
 // ============================================================================
 // START SERVER
 // ============================================================================
@@ -94,16 +99,44 @@ const startServer = async () => {
 
     const device = await Device.findOne();
 
-    app.listen(config.PORT, () => {
+    const server = http.createServer(app);
+
+    // Set up WebSockets
+    const wssClient = new WebSocket.Server({ noServer: true });
+    const wssDevice = new WebSocket.Server({ noServer: true });
+
+    setupClientWS(wssClient);
+    setupDeviceWS(wssDevice);
+
+    server.on('upgrade', (request, socket, head) => {
+        const pathname = new URL(request.url, `http://${request.headers.host}`).pathname;
+
+        if (pathname === '/ws/client') {
+            wssClient.handleUpgrade(request, socket, head, (ws) => {
+                wssClient.emit('connection', ws, request);
+            });
+        } else if (pathname === '/ws/device') {
+            wssDevice.handleUpgrade(request, socket, head, (ws) => {
+                wssDevice.emit('connection', ws, request);
+            });
+        } else {
+            socket.destroy();
+        }
+    });
+
+    server.listen(config.PORT, () => {
         console.log('');
         console.log('  ================================================================');
-        console.log('  QOPY Cloud Printing System v1.0 (Modular)');
+        console.log('  QOPY Cloud Printing System v1.0 (Modular + WS)');
         console.log('  ================================================================');
         console.log('');
         console.log('  Main Site:  http://localhost:' + config.PORT);
         console.log('  Admin:      http://localhost:' + config.PORT + '/admin');
         console.log('');
         console.log('  Device API: http://localhost:' + config.PORT + '/api/device/jobs');
+        console.log('  Device WS:  ws://localhost:' + config.PORT + '/ws/device');
+        console.log('  Client WS:  ws://localhost:' + config.PORT + '/ws/client');
+        console.log('');
         console.log(`  Device ID:  ${device ? device.deviceId : 'NONE'}`);
         console.log(`  API Key:    ${device ? device.apiKey : 'NONE'}`);
         console.log('');

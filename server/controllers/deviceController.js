@@ -28,9 +28,9 @@ const downloadJobFile = async (req, res) => {
     try {
         const job = await Job.findOne({ jobId: req.params.jobId, deviceId: req.device.deviceId });
         if (!job) return res.status(404).json({ error: 'Job not found' });
-        if (job.status !== 'PAID') return res.status(403).json({ error: 'Job not paid or already processed' });
+        if (!['PAID', 'ASSIGNED', 'PRINTING'].includes(job.status)) return res.status(403).json({ error: 'Job not paid or already processed' });
 
-        // Mark as printing once download starts
+        // Mark as printing once download starts, unless already marked
         job.status = 'PRINTING';
         await job.save();
 
