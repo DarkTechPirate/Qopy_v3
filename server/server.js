@@ -61,7 +61,7 @@ app.get("/", (req, res) => {
 app.use(express.static(path.join(__dirname, "public")));
 
 // Fallback to frontend index.html for non-API routes (allow API and WS to continue)
-app.get("*", (req, res, next) => {
+app.get("(.*)", (req, res, next) => {
   const url = req.path || "";
   if (
     url.startsWith("/api") ||
