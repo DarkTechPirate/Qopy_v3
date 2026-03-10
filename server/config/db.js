@@ -9,7 +9,8 @@ const connectDB = async () => {
 
         await seedAdmin();
     } catch (error) {
-        console.error(`Error: ${error.message}`);
+        console.error(`MongoDB connection failed: ${error.message}`);
+        console.error(`Attempted URI: ${process.env.MONGO_URI || 'mongodb://localhost:27017/qopy_db'}`);
         process.exit(1);
     }
 };
