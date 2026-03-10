@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const config = require('../config');
 
 // --- ENSURE UPLOAD FOLDER ---
@@ -13,7 +13,7 @@ if (!fs.existsSync(config.UPLOAD_DIR)) {
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, config.UPLOAD_DIR),
     filename: (req, file, cb) => {
-        const unique = uuidv4();
+        const unique = crypto.randomUUID();
         const ext = path.extname(file.originalname);
         cb(null, `${unique}${ext}`);
     }

@@ -1,7 +1,7 @@
 const { execSync } = require('child_process');
 const path = require('path');
 
-const REQUIRED_DEPS = ['express', 'cors', 'multer', 'uuid', 'qrcode', 'pdf-lib', 'body-parser'];
+const REQUIRED_DEPS = ['express', 'cors', 'multer', 'qrcode', 'pdf-lib', 'body-parser'];
 
 function ensureDependencies() {
     let missing = [];

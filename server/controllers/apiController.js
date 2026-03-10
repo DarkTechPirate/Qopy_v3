@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { PDFDocument } = require('pdf-lib');
 const config = require('../config');
@@ -17,7 +17,7 @@ const uploadPdf = async (req, res) => {
         const pdfDoc = await PDFDocument.load(fileBuffer, { ignoreEncryption: true });
         const pageCount = pdfDoc.getPageCount();
 
-        const jobId = uuidv4();
+        const jobId = crypto.randomUUID();
 
         // Save to MongoDB
         await Job.create({
@@ -131,7 +131,7 @@ const confirmPayment = async (req, res) => {
         if (!job) return res.status(404).json({ error: 'Job not found' });
         if (job.status !== 'AWAITING_PAYMENT') return res.status(400).json({ error: 'Job not awaiting payment' });
 
-        const paymentId = 'PAY_' + uuidv4().slice(0, 12).toUpperCase();
+        const paymentId = 'PAY_' + crypto.randomUUID().slice(0, 12).toUpperCase();
         job.paymentId = paymentId;
         job.status = 'PAID';
 
