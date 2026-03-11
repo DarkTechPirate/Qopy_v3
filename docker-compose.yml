@@ -7,18 +7,8 @@ services:
       - "127.0.0.1:3001:5000"
     environment:
       - PORT=5000
-      - MONGO_URI=mongodb://mongo:27017/qopy_db
-    depends_on:
-      - mongo
+      - MONGO_URI=mongodb://host.docker.internal:27017/qopy_db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./server/uploads:/app/server/uploads
-
-  mongo:
-    image: mongo:6
-    container_name: qopy_mongo
-    restart: unless-stopped
-    volumes:
-      - qopy_mongo_data:/data/db
-
-volumes:
-  qopy_mongo_data:
