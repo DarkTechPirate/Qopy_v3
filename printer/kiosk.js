@@ -35,7 +35,7 @@ const { PDFDocument } = require('pdf-lib');
 // CONFIG — Change these for your setup
 // ============================================================================
 const CONFIG = {
-  cloudUrl: process.env.QOPY_CLOUD_URL || 'http://localhost:5000',
+  cloudUrl: process.env.QOPY_CLOUD_URL || 'https://qopy.4iglobalsportshub.co',
   deviceId: process.env.QOPY_DEVICE_ID || 'KIOSK_001',
   apiKey: process.env.QOPY_API_KEY || 'SECRET_KEY_123',
   pollInterval: 3000,      // check for new jobs every 3 seconds
@@ -206,7 +206,7 @@ function apiRequest(method, endpoint, body) {
     const options = {
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname + url.search,
+      path: (url.pathname + url.search).replace(/^\/api/, '/api/device'),
       method,
       headers: {
         'device-id': CONFIG.deviceId,
@@ -244,7 +244,7 @@ function downloadFile(endpoint, destPath) {
     const options = {
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname + url.search,
+      path: endpoint.startsWith('/api') ? endpoint : `/api/device${endpoint}`,
       method: 'GET',
       headers: {
         'device-id': CONFIG.deviceId,

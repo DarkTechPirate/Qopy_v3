@@ -1,8 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { confirmPayment } from '../api';
 
 export default function Payment({ job, onConfirmed, onBack, onError }) {
   const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    // 1. Establish WebSocket Connection to listen for PAID status
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/client`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      if (job.jobId) {
+        ws.send(JSON.stringify({ type: 'SUBSCRIBE', jobId: job.jobId }));
+      }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'JOB_STATUS' && data.jobId === job.jobId) {
+          if (data.status === 'PAID') {
+            onConfirmed({ paymentId: data.paymentId || 'REALTIME_SUCCESS' });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse WS message:', err);
+      }
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+    };
+  }, [job.jobId, onConfirmed]);
 
   const handleConfirm = async () => {
     onError(null);

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const JobSchema = new mongoose.Schema({
     jobId: { type: String, required: true, unique: true },
     fileName: { type: String, required: true },
-    filePath: { type: String, required: true },
+    filePath: { type: String },
     storedName: { type: String, required: true },
     pages: { type: Number, required: true },
     printType: { type: String, enum: ['bw', 'color', null], default: null },
