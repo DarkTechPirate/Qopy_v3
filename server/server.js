@@ -39,6 +39,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // ROUTES
 // ============================================================================
 
+// Serve frontend static files from `server/public`
+app.use(express.static(path.join(__dirname, "public")));
+
 // Public API
 app.use("/api", apiRoutes);
 
@@ -49,19 +52,7 @@ app.use("/api/device", deviceRoutes);
 app.use("/api", adminRoutes); // for /api/admin/... endpoints
 app.use("/", adminRoutes); // for /admin UI
 
-// Root endpoint
-app.get("/", (req, res) => {
-  res.json({
-    service: "Qopy Cloud Printing System",
-    version: "1.0",
-    status: "running",
-  });
-});
-
-// Serve frontend static files from `server/public` when present.
-app.use(express.static(path.join(__dirname, "public")));
-
-// Fallback to frontend index.html for non-API routes (allow API and WS to continue)
+// Fallback to frontend index.html for non-API routes
 app.get(/.*/, (req, res, next) => {
   const url = req.path || "";
   if (
