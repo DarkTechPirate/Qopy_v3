@@ -11,6 +11,8 @@ function trackerLevel(status) {
 }
 
 export default function Confirmation({ job, onReset }) {
+  const [status, setStatus] = useState('PAID');
+  const [message, setMessage] = useState('Your document will be printed shortly.');
   const [printedPages, setPrintedPages] = useState(0);
   const [totalPages, setTotalPages] = useState(job.pages * (job.copies || 1));
   const wsRef = useRef(null);
