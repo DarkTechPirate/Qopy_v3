@@ -33,6 +33,22 @@ export default function Confirmation({ job, onReset }) {
         const data = JSON.parse(event.data);
         if (data.type === 'JOB_STATUS' && data.jobId === job.jobId) {
           setStatus(data.status);
+
+          // Save to local storage once the job is confirmed
+          if (['PAID', 'ASSIGNED', 'PRINTING', 'COMPLETED', 'FAILED'].includes(data.status)) {
+            const historyStr = localStorage.getItem('qopy_print_history');
+            let history = [];
+            try {
+              history = historyStr ? JSON.parse(historyStr) : [];
+            } catch (e) {
+              history = [];
+            }
+            if (!history.includes(job.jobId)) {
+              history.unshift(job.jobId);
+              localStorage.setItem('qopy_print_history', JSON.stringify(history));
+            }
+          }
+
           if (data.printedPages !== undefined) setPrintedPages(data.printedPages);
           if (data.totalPages !== undefined) setTotalPages(data.totalPages);
 

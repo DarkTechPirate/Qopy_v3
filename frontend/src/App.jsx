@@ -3,6 +3,7 @@ import Upload from './components/Upload';
 import Options from './components/Options';
 import Payment from './components/Payment';
 import Confirmation from './components/Confirmation';
+import History from './components/History';
 
 const TOTAL_STEPS = 4;
 
@@ -55,10 +56,17 @@ export default function App() {
   return (
     <>
       <header className="header">
-        <div className="header-brand">
+        <div className="header-brand" onClick={reset} style={{ cursor: 'pointer' }}>
           <h1>QOPY</h1>
           <span className="tagline">Self-Service Printing</span>
         </div>
+        <button
+          className="btn btn-outline"
+          onClick={() => goTo(0)}
+          style={{ padding: '6px 12px', fontSize: '13px' }}
+        >
+          View History
+        </button>
       </header>
 
       <div className="container">
@@ -75,6 +83,9 @@ export default function App() {
 
         {/* Error banner */}
         {error && <div className="error-banner">{error}</div>}
+
+        {/* History Screen (step 0) */}
+        {step === 0 && <History onBack={() => goTo(1)} />}
 
         {/* Screens */}
         {step === 1 && (
