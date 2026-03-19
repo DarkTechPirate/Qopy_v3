@@ -4,13 +4,19 @@ const bcrypt = require('bcryptjs');
 
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/qopy_db');
+        const uri = process.env.MONGO_URI;
+
+        if (!uri) {
+            throw new Error("MONGO_URI not found in environment");
+        }
+
+        const conn = await mongoose.connect(uri);
         console.log(`MongoDB Connected: ${conn.connection.host}`);
 
         await seedAdmin();
     } catch (error) {
         console.error(`MongoDB connection failed: ${error.message}`);
-        console.error(`Attempted URI: ${process.env.MONGO_URI || 'mongodb://localhost:27017/qopy_db'}`);
+        console.error(`Attempted URI: ${process.env.MONGO_URI}`);
         process.exit(1);
     }
 };

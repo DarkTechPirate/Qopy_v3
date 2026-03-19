@@ -5,7 +5,7 @@
 // ============================================================================
 
 // --- AUTO DEPENDENCY INSTALLER ---
-require("dotenv").config();
+// require("dotenv").config();
 const { ensureDependencies } = require("./utils/autoInstall");
 ensureDependencies();
 
